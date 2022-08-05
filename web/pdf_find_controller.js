@@ -335,6 +335,10 @@ class PDFFindController {
     return this._pageMatchesLength;
   }
 
+  get pageMatchesQuery() {
+    return this._pageMatchesQuery;
+  }
+  
   get selected() {
     return this._selected;
   }
@@ -455,6 +459,7 @@ class PDFFindController {
     this._pdfDocument = null;
     this._pageMatches = [];
     this._pageMatchesLength = [];
+    this._pageMatchesQuery = [];
     this._state = null;
     // Currently selected match.
     this._selected = {
@@ -488,7 +493,18 @@ class PDFFindController {
   get #query() {
     if (this._state.query !== this._rawQuery) {
       this._rawQuery = this._state.query;
-      [this._normalizedQuery] = normalize(this._state.query);
+
+      if (this._state.query instanceof Array) {
+        // 多个查询关键字，分别转换，返回数组
+        this._normalizedQuery = this._state.query.map(data => {
+          [data.KD] = normalize(data.KD);
+          return data;
+        })
+      } else {
+        let normalizeQueryArray = [{KD: ''}];
+        [normalizeQueryArray[0].KD] = normalize(this._state.query);
+        this._normalizedQuery = normalizeQueryArray;
+      }
     }
     return this._normalizedQuery;
   }
@@ -556,33 +572,111 @@ class PDFFindController {
     return true;
   }
 
-  #calculateRegExpMatch(query, entireWord, pageIndex, pageContent) {
-    const matches = [],
-      matchesLength = [];
+  #calculateRegExpMatch(queryArray, entireWord, pageIndex, pageContent) {
+    let {matches, matchesLength, matchesQuery} = this.#calculateExpMatch(queryArray, entireWord, pageIndex, pageContent)
+    
+    // 同步排序
+    let indexOrder = matches
+      .map((a, i) => [a, i])
+      .sort((a, b) => a[0] - b[0])
+      .map(a => a[1]);
 
-    const diffs = this._pageDiffs[pageIndex];
-    let match;
-    while ((match = query.exec(pageContent)) !== null) {
-      if (
-        entireWord &&
-        !this.#isEntireWord(pageContent, match.index, match[0].length)
-      ) {
-        continue;
-      }
+    matches = indexOrder.map(i => matches[i]);
+    matchesLength = indexOrder.map(i => matchesLength[i]);
+    matchesQuery = indexOrder.map(i => matchesQuery[i]);
 
-      const [matchPos, matchLen] = getOriginalIndex(
-        diffs,
-        match.index,
-        match[0].length
-      );
-
-      if (matchLen) {
-        matches.push(matchPos);
-        matchesLength.push(matchLen);
-      }
-    }
+    // 设值对象
     this._pageMatches[pageIndex] = matches;
     this._pageMatchesLength[pageIndex] = matchesLength;
+    this._pageMatchesQuery[pageIndex] = matchesQuery;
+  }
+
+  // 计算匹配结果位置
+  #calculateExpMatch(queryArray, entireWord, pageIndex, pageContent) {
+    let matches = [],
+    matchesLength = [],
+    matchesQuery = [];
+
+    const diffs = this._pageDiffs[pageIndex];
+    queryArray.forEach((data, index) => {
+      let query = data.query
+      if (!query) {
+        return
+      }
+
+      let match;
+      while ((match = query.exec(pageContent)) !== null) {
+        if (
+          entireWord &&
+          !this.#isEntireWord(pageContent, match.index, match[0].length)
+        ) {
+          continue;
+        }
+
+        const [matchPos, matchLen] = getOriginalIndex(
+          diffs,
+          match.index,
+          match[0].length
+        );
+
+        if (matchLen) {
+          matches.push(matchPos);
+          matchesLength.push(matchLen);
+          matchesQuery.push(data);
+      }
+     }
+
+      // 嵌套查询过滤
+      if (data.pquery && matches.length > 0) {
+        let parentMatches = [], parentMatchesLength = [];
+        let pquery = data.pquery
+
+        let match;
+        while ((match = pquery.exec(pageContent)) !== null) {
+          if (
+            entireWord &&
+            !this.#isEntireWord(pageContent, match.index, match[0].length)
+          ) {
+            continue;
+          }
+  
+          const [matchPos, matchLen] = getOriginalIndex(
+            diffs,
+            match.index,
+            match[0].length
+          );
+
+          if (matchLen) {
+            parentMatches.push(matchPos);
+            parentMatchesLength.push(matchLen);
+          }
+        }
+
+        if (parentMatches.length === 0) {
+          // 父级没有匹配则子级全部清空
+          matches = []
+          matchesLength = []
+          matchesQuery = []
+        } else {
+          // 子级数据在父级范围内的保留，否则删除
+          // 找到索引位置
+          let matchIdx = []
+          parentMatches.forEach((pm, i) => {
+            matches.forEach((m, j) => {
+              if (pm <= m && pm + parentMatchesLength[i] >= m + matchesLength[j]) {
+                matchIdx.push(j)
+              }
+            })
+          })
+
+          matches = matchIdx.map(i => matches[i])
+          matchesLength = matchIdx.map(i => matchesLength[i])
+          matchesQuery = matchIdx.map(i => matchesQuery[i])
+        }
+     }
+    })
+
+    return {matches: matches, matchesLength: matchesLength, matchesQuery: matchesQuery}
   }
 
   #convertToRegExpString(query, hasDiacritics) {
@@ -652,16 +746,72 @@ class PDFFindController {
   }
 
   #calculateMatch(pageIndex) {
-    let query = this.#query;
-    if (query.length === 0) {
+    const { caseSensitive, entireWord, phraseSearch } = this._state;
+    const pageContent = this._pageContents[pageIndex];
+ 
+    let queryArray = this.#calculateQuery(pageIndex, phraseSearch, caseSensitive);
+    if (queryArray.length < 1) {
+      return;
+    }
+    
+    this.#calculateRegExpMatch(queryArray, entireWord, pageIndex, pageContent);
+
+    // When `highlightAll` is set, ensure that the matches on previously
+    // rendered (and still active) pages are correctly highlighted.
+    if (this._state.highlightAll) {
+      this.#updatePage(pageIndex);
+    }
+    if (this._resumePageIdx === pageIndex) {
+      this._resumePageIdx = null;
+      this.#nextPageMatch();
+    }
+
+    // Update the match count.
+    const pageMatchesCount = this._pageMatches[pageIndex].length;
+    if (pageMatchesCount > 0) {
+      this._matchesCountTotal += pageMatchesCount;
+      this.#updateUIResultsCount();
+    }
+  }
+
+  // 构建查询数组
+  #calculateQuery(pageIndex, phraseSearch, caseSensitive) {
+    let queryArray = this.#query;
+    if (queryArray.length === 0) {
       // Do nothing: the matches should be wiped out already.
       return;
     }
 
-    const { caseSensitive, entireWord, phraseSearch } = this._state;
-    const pageContent = this._pageContents[pageIndex];
     const hasDiacritics = this._hasDiacritics[pageIndex];
 
+    let regQueryArray = [];
+    let parentRegQueryArray = [];
+    queryArray.forEach((data, index) => {
+      let query = data.KD
+      if (query.length === 0) {
+        return
+      }
+
+      regQueryArray[index] = this.#createRegQuery(query, hasDiacritics, phraseSearch, caseSensitive)
+      parentRegQueryArray[index] = null
+      // 是否存在嵌套查询的关键字
+      if (data.PKD) {
+        parentRegQueryArray[index] = this.#createRegQuery(data.PKD, hasDiacritics, true, caseSensitive)
+      }
+    })
+
+    // 设置查询条件
+    queryArray = queryArray.map((data, index) => {
+      data['query'] = regQueryArray[index]
+      data['pquery'] = parentRegQueryArray[index]
+      return data
+    })
+
+    return queryArray
+  }
+
+  // 查询关键字转换
+  #createRegQuery(query, hasDiacritics, phraseSearch, caseSensitive) {
     let isUnicode = false;
     if (phraseSearch) {
       [isUnicode, query] = this.#convertToRegExpString(query, hasDiacritics);
@@ -686,26 +836,8 @@ class PDFFindController {
     }
 
     const flags = `g${isUnicode ? "u" : ""}${caseSensitive ? "" : "i"}`;
-    query = new RegExp(query, flags);
 
-    this.#calculateRegExpMatch(query, entireWord, pageIndex, pageContent);
-
-    // When `highlightAll` is set, ensure that the matches on previously
-    // rendered (and still active) pages are correctly highlighted.
-    if (this._state.highlightAll) {
-      this.#updatePage(pageIndex);
-    }
-    if (this._resumePageIdx === pageIndex) {
-      this._resumePageIdx = null;
-      this.#nextPageMatch();
-    }
-
-    // Update the match count.
-    const pageMatchesCount = this._pageMatches[pageIndex].length;
-    if (pageMatchesCount > 0) {
-      this._matchesCountTotal += pageMatchesCount;
-      this.#updateUIResultsCount();
-    }
+    return new RegExp(query, flags);
   }
 
   #extractText() {
@@ -798,6 +930,7 @@ class PDFFindController {
       this._resumePageIdx = null;
       this._pageMatches.length = 0;
       this._pageMatchesLength.length = 0;
+      this._pageMatchesQuery.length = 0;
       this._matchesCountTotal = 0;
 
       this.#updateAllPages(); // Wipe out any previously highlighted matches.
@@ -816,7 +949,7 @@ class PDFFindController {
     }
 
     // If there's no query there's no point in searching.
-    if (this.#query === "") {
+    if (this.#query.length === 0) {
       this.#updateUIState(FindState.FOUND);
       return;
     }

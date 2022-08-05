@@ -149,7 +149,7 @@ class TextHighlighter {
     return result;
   }
 
-  _renderMatches(matches) {
+  _renderMatches(matches, pageMatchesQuery) {
     // Early exit if there is nothing to render.
     if (matches.length === 0) {
       return;
@@ -166,13 +166,13 @@ class TextHighlighter {
       offset: undefined,
     };
 
-    function beginText(begin, className) {
+    function beginText(begin, className, matchId) {
       const divIdx = begin.divIdx;
       textDivs[divIdx].textContent = "";
-      return appendTextToDiv(divIdx, 0, begin.offset, className);
+      return appendTextToDiv(divIdx, 0, begin.offset, className, matchId);
     }
 
-    function appendTextToDiv(divIdx, fromOffset, toOffset, className) {
+    function appendTextToDiv(divIdx, fromOffset, toOffset, className, matchId) {
       let div = textDivs[divIdx];
       if (div.nodeType === Node.TEXT_NODE) {
         const span = document.createElement("span");
@@ -189,6 +189,15 @@ class TextHighlighter {
       if (className) {
         const span = document.createElement("span");
         span.className = `${className} appended`;
+
+        // 外部匹配ID
+        if (matchId) {
+          span.setAttribute('mid', matchId)
+        }
+
+        // 页码
+        span.setAttribute('page', pageIdx)
+
         span.append(node);
         div.append(span);
         return className.includes("selected") ? span.offsetLeft : 0;
@@ -209,22 +218,27 @@ class TextHighlighter {
 
     for (let i = i0; i < i1; i++) {
       const match = matches[i];
+      // 查询参数
+      const matchQuery = pageMatchesQuery[i];
+      const matchClass = matchQuery.HLClass ? " " + matchQuery.HLClass : '';
+      const matchID = matchQuery.ID;
+
       const begin = match.begin;
       const end = match.end;
       const isSelected = isSelectedPage && i === selectedMatchIdx;
-      const highlightSuffix = isSelected ? " selected" : "";
+      const highlightSuffix = isSelected ? " selected" : matchClass;
       let selectedLeft = 0;
 
       // Match inside new div.
       if (!prevEnd || begin.divIdx !== prevEnd.divIdx) {
         // If there was a previous div, then add the text at the end.
         if (prevEnd !== null) {
-          appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
+          appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset, null, matchID);
         }
         // Clear the divs and set the content until the starting point.
         beginText(begin);
       } else {
-        appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset);
+        appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset, null, matchID);
       }
 
       if (begin.divIdx === end.divIdx) {
@@ -232,19 +246,21 @@ class TextHighlighter {
           begin.divIdx,
           begin.offset,
           end.offset,
-          "highlight" + highlightSuffix
+          "highlight" + highlightSuffix,
+          matchID
         );
       } else {
         selectedLeft = appendTextToDiv(
           begin.divIdx,
           begin.offset,
           infinity.offset,
-          "highlight begin" + highlightSuffix
+          "highlight begin" + highlightSuffix,
+          matchID
         );
         for (let n0 = begin.divIdx + 1, n1 = end.divIdx; n0 < n1; n0++) {
           textDivs[n0].className = "highlight middle" + highlightSuffix;
         }
-        beginText(end, "highlight end" + highlightSuffix);
+        beginText(end, "highlight end" + highlightSuffix, matchID);
       }
       prevEnd = end;
 
@@ -291,9 +307,10 @@ class TextHighlighter {
     // used for the textLayer.
     const pageMatches = findController.pageMatches[pageIdx] || null;
     const pageMatchesLength = findController.pageMatchesLength[pageIdx] || null;
+    const pageMatchesQuery = findController.pageMatchesQuery[pageIdx] || null;
 
     this.matches = this._convertMatches(pageMatches, pageMatchesLength);
-    this._renderMatches(this.matches);
+    this._renderMatches(this.matches, pageMatchesQuery);
   }
 }
 

@@ -255,6 +255,49 @@ function webViewerLoad() {
 
     PDFViewerApplication.run(config);
   }
+
+
+
+
+  // 文档加载成功后，执行搜索
+  var t = setInterval(() => {
+    if (PDFViewerApplication.initialized) {
+      // 设置查询参数
+      // 多关键字查询
+      const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
+             {KD: 'JavaScript', ID: 'id234', HLClass: 'hlC'}]
+
+      // 嵌套查询
+      // const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based xxx compilers, our xxx '}]
+
+      // 普通查询
+      // const query = 'dynamic'
+
+      search4Results(query)
+
+      clearInterval(t);
+    }
+  }, 50)
+}
+
+// 搜索
+function search4Results(query) {
+  PDFViewerApplication.eventBus.on('updatefindmatchescount', function({
+  }) {
+    //if (state === 0) {
+      $('.appended').each(function(index) {
+        console.log('xxxxx', $('.appended').length)
+        $(this).on('click', function(){
+          console.log(index);
+        })
+      })
+    // }
+  })
+
+  // 触发搜索事件
+  PDFViewerApplication.eventBus.on("pagesinit", function () {
+    PDFViewerApplication.eventBus.dispatch("find", { type: "", query: query, highlightAll: true, phraseSearch: true });
+  });
 }
 
 // Block the "load" event until all pages are loaded, to ensure that printing
