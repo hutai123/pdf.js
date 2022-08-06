@@ -501,9 +501,20 @@ class PDFFindController {
           return data;
         })
       } else {
-        let normalizeQueryArray = [{KD: ''}];
-        [normalizeQueryArray[0].KD] = normalize(this._state.query);
-        this._normalizedQuery = normalizeQueryArray;
+        let normalizeQueryArray = [{KD: this._state.query}];
+        
+        // 组合基础查询
+        if (this._state.basicQuery) {
+          let data = JSON.parse(this._state.basicQuery)
+          data.forEach(d => {
+            normalizeQueryArray.push(d)
+          })
+        }
+
+        this._normalizedQuery = normalizeQueryArray.map(data => {
+          [data.KD] = normalize(data.KD);
+          return data;
+        })
       }
     }
     return this._normalizedQuery;
@@ -604,6 +615,10 @@ class PDFFindController {
         return
       }
 
+      let tmpMatches = [],
+      tmpMatchesLength = [],
+      tmpMatchesQuery = [];
+
       let match;
       while ((match = query.exec(pageContent)) !== null) {
         if (
@@ -620,9 +635,9 @@ class PDFFindController {
         );
 
         if (matchLen) {
-          matches.push(matchPos);
-          matchesLength.push(matchLen);
-          matchesQuery.push(data);
+          tmpMatches.push(matchPos);
+          tmpMatchesLength.push(matchLen);
+          tmpMatchesQuery.push(data);
       }
      }
 
@@ -654,25 +669,30 @@ class PDFFindController {
 
         if (parentMatches.length === 0) {
           // 父级没有匹配则子级全部清空
-          matches = []
-          matchesLength = []
-          matchesQuery = []
         } else {
           // 子级数据在父级范围内的保留，否则删除
           // 找到索引位置
           let matchIdx = []
           parentMatches.forEach((pm, i) => {
-            matches.forEach((m, j) => {
-              if (pm <= m && pm + parentMatchesLength[i] >= m + matchesLength[j]) {
+            tmpMatches.forEach((m, j) => {
+              if (pm <= m && pm + parentMatchesLength[i] >= m + tmpMatchesLength[j]) {
                 matchIdx.push(j)
               }
             })
           })
 
-          matches = matchIdx.map(i => matches[i])
-          matchesLength = matchIdx.map(i => matchesLength[i])
-          matchesQuery = matchIdx.map(i => matchesQuery[i])
+          tmpMatches = matchIdx.map(i => tmpMatches[i])
+          tmpMatchesLength = matchIdx.map(i => tmpMatchesLength[i])
+          tmpMatchesQuery = matchIdx.map(i => tmpMatchesQuery[i])
+
+          matches = matches.concat(tmpMatches)
+          matchesLength = matchesLength.concat(tmpMatchesLength)
+          matchesQuery = matchesQuery.concat(tmpMatchesQuery)
         }
+     } else {
+      matches = matches.concat(tmpMatches)
+      matchesLength = matchesLength.concat(tmpMatchesLength)
+      matchesQuery = matchesQuery.concat(tmpMatchesQuery)
      }
     })
 
@@ -753,7 +773,7 @@ class PDFFindController {
     if (queryArray.length < 1) {
       return;
     }
-    
+
     this.#calculateRegExpMatch(queryArray, entireWord, pageIndex, pageContent);
 
     // When `highlightAll` is set, ensure that the matches on previously

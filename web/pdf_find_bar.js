@@ -30,6 +30,7 @@ class PDFFindBar {
     this.bar = options.bar;
     this.toggleButton = options.toggleButton;
     this.findField = options.findField;
+    this.findBasicField = options.findBasicField;
     this.highlightAll = options.highlightAllCheckbox;
     this.caseSensitive = options.caseSensitiveCheckbox;
     this.matchDiacritics = options.matchDiacriticsCheckbox;
@@ -105,6 +106,7 @@ class PDFFindBar {
       highlightAll: this.highlightAll.checked,
       findPrevious: findPrev,
       matchDiacritics: this.matchDiacritics.checked,
+      basicQuery: this.findBasicField.value,
     });
   }
 

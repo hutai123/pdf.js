@@ -161,6 +161,7 @@ function getViewerConfiguration() {
       bar: document.getElementById("findbar"),
       toggleButton: document.getElementById("viewFind"),
       findField: document.getElementById("findInput"),
+      findBasicField: document.getElementById("findBasicInput"),
       highlightAllCheckbox: document.getElementById("findHighlightAll"),
       caseSensitiveCheckbox: document.getElementById("findMatchCase"),
       matchDiacriticsCheckbox: document.getElementById("findMatchDiacritics"),

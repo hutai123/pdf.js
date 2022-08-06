@@ -58,7 +58,23 @@ See https://github.com/adobe-type-tools/cmap-resources
     
     <script src="https://libs.baidu.com/jquery/2.1.1/jquery.min.js"></script>
     <script>
+      // 设置查询参数
+      // 多关键字查询
+      const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
+            {KD: 'JavaScript', ID: 'id234', HLClass: 'hlC'}]
+
+      // 嵌套查询
+      // const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based xxx compilers, our xxx '}]
+
+      // 普通查询
+      // const query = 'dynamic'
+      
       $(document).ready(function(){
+        // 设置基础查询参数
+        if (!$('#findBasicInput').val()) {
+          // $('#findBasicInput').val(JSON.stringify(query))
+        }
+
         startSearch()
 
         $('#findInput').on('focus', function(ev) {
@@ -89,17 +105,6 @@ See https://github.com/adobe-type-tools/cmap-resources
           if (envReady()) {
             // 中止等待
             clearInterval(t);
-
-            // 设置查询参数
-            // 多关键字查询
-            const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
-                  {KD: 'JavaScript', ID: 'id234', HLClass: 'hlC'}]
-
-            // 嵌套查询
-            // const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based xxx compilers, our xxx '}]
-
-            // 普通查询
-            // const query = 'dynamic'
 
             search4Results(query)
 
@@ -260,6 +265,7 @@ See https://github.com/adobe-type-tools/cmap-resources
         <div class="findbar hidden doorHanger" id="findbar">
           <div id="findbarInputContainer">
             <input id="findInput" class="toolbarField" title="Find" placeholder="Find in document…" tabindex="91" data-l10n-id="find_input" aria-invalid="false">
+            <input id="findBasicInput" type="hidden"/>
             <div class="splitToolbarButton">
               <button id="findPrevious" class="toolbarButton" title="Find the previous occurrence of the phrase" tabindex="92" data-l10n-id="find_previous">
                 <span data-l10n-id="find_previous_label">Previous</span>
