@@ -41,7 +41,6 @@ See https://github.com/adobe-type-tools/cmap-resources
     <link rel="resource" type="application/l10n" href="locale/locale.properties">
 <!--#endif-->
 
-    <script src="https://libs.baidu.com/jquery/2.1.1/jquery.min.js"></script>
 <!--#if !PRODUCTION-->
     <script defer src="../node_modules/es-module-shims/dist/es-module-shims.js"></script>
     <script type="importmap-shim">
@@ -56,6 +55,148 @@ See https://github.com/adobe-type-tools/cmap-resources
     </script>
 
     <script src="viewer.js" type="module-shim"></script>
+    
+    <script src="https://libs.baidu.com/jquery/2.1.1/jquery.min.js"></script>
+    <script>
+      $(document).ready(function(){
+        startSearch()
+
+        $('#findInput').on('focus', function(ev) {
+          console.log('点击');
+          //达到事件结束的效果 但是函数还是往下运行
+          //
+          ev.preventDefault();
+          console.log('已经拦截');
+        })
+      })
+
+      // 默认响应事件函数
+      function defaultClickAction(id, page) {
+        console.log('click', id, page)
+
+        console.log(PDFViewerApplication)
+
+        const pageMatch = getPageMatchQuery()
+        console.log(pageMatch)
+
+        const queryMatch = getQueryMatchPage()
+        console.log(queryMatch)
+      }
+
+      function startSearch() {
+        // 文档加载成功后，执行搜索
+        var t = setInterval(() => {
+          if (envReady()) {
+            // 中止等待
+            clearInterval(t);
+
+            // 设置查询参数
+            // 多关键字查询
+            const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
+                  {KD: 'JavaScript', ID: 'id234', HLClass: 'hlC'}]
+
+            // 嵌套查询
+            // const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based xxx compilers, our xxx '}]
+
+            // 普通查询
+            // const query = 'dynamic'
+
+            search4Results(query)
+
+            onSearching()
+          }
+        }, 50)
+      }
+
+
+      // 搜索过程中
+      function onSearching() {
+        PDFViewerApplication.eventBus.on('updatefindmatchescount', function(matchCount) {
+          const pageMatch = getPageMatchQuery()
+          console.log("pageMatch::", pageMatch)
+          
+          const queryMatch = getQueryMatchPage2(pageMatch)
+          console.log("queryMatch:", queryMatch)
+        })
+
+        PDFViewerApplication.eventBus.on('find', function(matchCount) {
+          console.log('matchCountmatchCount: ', matchCount)
+        })
+      }
+
+      // 运行环境准备
+      function envReady() {
+        try{
+          if(PDFViewerApplication && typeof(PDFViewerApplication) == "object" && PDFViewerApplication.initialized){
+            return true
+          }
+        }catch(e){
+          return false
+        }
+      }
+
+      // 搜索
+      function search4Results(query) {
+        // 触发搜索事件
+        PDFViewerApplication.eventBus.on("pagesinit", function () {
+          PDFViewerApplication.eventBus.dispatch("find", { type: "", query: query, highlightAll: true, phraseSearch: true });
+        });
+      }
+
+      // 每页匹配的查询结果
+      function getPageMatchQuery() {
+        const pageMatch = PDFViewerApplication.findController.pageMatchesQuery.map((page, index) => {
+          const data = page.map(p => p.ID ? p.ID : 'seacrchField').reduce((pre, item) => {
+            pre[item] ? pre[item]++ : pre[item] = 1
+            return pre
+          }, {})
+
+          return data
+        })
+
+        return pageMatch
+      }
+
+      // 查询匹配结果出现在哪些页面
+      function getQueryMatchPage() {
+        const pagetMatch = getPageMatchQuery()
+
+        let data = pagetMatch.reduce((pre, item, idx) => {
+          const keys = Object.keys(item)
+          keys.forEach((key, i) => {
+            if (pre[key]) {
+              pre[key]['page'].push(idx)
+              pre[key]['num'] += item[key]
+            } else {
+              pre[key] = {page: [idx], num: item[key]}
+            }
+          })
+
+          return pre
+        }, {})
+
+        return data
+      }
+
+
+      function getQueryMatchPage2(pagetMatch) {
+        let data = pagetMatch.reduce((pre, item, idx) => {
+          const keys = Object.keys(item)
+          keys.forEach((key, i) => {
+            if (pre[key]) {
+              pre[key]['page'].push(idx)
+              pre[key]['num'] += item[key]
+            } else {
+              pre[key] = {page: [idx], num: item[key]}
+            }
+          })
+
+          return pre
+        }, {})
+
+        return data
+      }
+    </script>
 <!--#endif-->
 
 <!--#if (GENERIC && !MINIFIED) -->

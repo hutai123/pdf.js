@@ -166,13 +166,13 @@ class TextHighlighter {
       offset: undefined,
     };
 
-    function beginText(begin, className, matchId) {
+    function beginText(begin, className, otherParams) {
       const divIdx = begin.divIdx;
       textDivs[divIdx].textContent = "";
-      return appendTextToDiv(divIdx, 0, begin.offset, className, matchId);
+      return appendTextToDiv(divIdx, 0, begin.offset, className, otherParams);
     }
 
-    function appendTextToDiv(divIdx, fromOffset, toOffset, className, matchId) {
+    function appendTextToDiv(divIdx, fromOffset, toOffset, className, otherParams) {
       let div = textDivs[divIdx];
       if (div.nodeType === Node.TEXT_NODE) {
         const span = document.createElement("span");
@@ -191,10 +191,15 @@ class TextHighlighter {
         span.className = `${className} appended`;
 
         // 外部匹配ID
-        if (matchId) {
-          span.setAttribute('mid', matchId)
+        if (otherParams.matchId) {
+          span.setAttribute('mid', otherParams.matchId)
         }
 
+        let clickFunc = `defaultClickAction('${otherParams.matchId}',${pageIdx})`
+        if (otherParams.clickfunc) {
+          clickFunc = otherParams.clickFunc
+        }
+        span.setAttribute('onclick', clickFunc)
         // 页码
         span.setAttribute('page', pageIdx)
 
@@ -221,7 +226,7 @@ class TextHighlighter {
       // 查询参数
       const matchQuery = pageMatchesQuery[i];
       const matchClass = matchQuery.HLClass ? " " + matchQuery.HLClass : '';
-      const matchID = matchQuery.ID;
+      const otherParams = {matchId: matchQuery.ID, clickFunc: matchQuery.clickFunc}
 
       const begin = match.begin;
       const end = match.end;
@@ -233,12 +238,12 @@ class TextHighlighter {
       if (!prevEnd || begin.divIdx !== prevEnd.divIdx) {
         // If there was a previous div, then add the text at the end.
         if (prevEnd !== null) {
-          appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset, null, matchID);
+          appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset, null, otherParams);
         }
         // Clear the divs and set the content until the starting point.
         beginText(begin);
       } else {
-        appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset, null, matchID);
+        appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset, null, otherParams);
       }
 
       if (begin.divIdx === end.divIdx) {
@@ -247,7 +252,7 @@ class TextHighlighter {
           begin.offset,
           end.offset,
           "highlight" + highlightSuffix,
-          matchID
+          otherParams
         );
       } else {
         selectedLeft = appendTextToDiv(
@@ -255,12 +260,12 @@ class TextHighlighter {
           begin.offset,
           infinity.offset,
           "highlight begin" + highlightSuffix,
-          matchID
+          otherParams
         );
         for (let n0 = begin.divIdx + 1, n1 = end.divIdx; n0 < n1; n0++) {
           textDivs[n0].className = "highlight middle" + highlightSuffix;
         }
-        beginText(end, "highlight end" + highlightSuffix, matchID);
+        beginText(end, "highlight end" + highlightSuffix, otherParams);
       }
       prevEnd = end;
 

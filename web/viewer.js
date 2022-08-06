@@ -255,49 +255,6 @@ function webViewerLoad() {
 
     PDFViewerApplication.run(config);
   }
-
-
-
-
-  // 文档加载成功后，执行搜索
-  var t = setInterval(() => {
-    if (PDFViewerApplication.initialized) {
-      // 设置查询参数
-      // 多关键字查询
-      const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
-             {KD: 'JavaScript', ID: 'id234', HLClass: 'hlC'}]
-
-      // 嵌套查询
-      // const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based xxx compilers, our xxx '}]
-
-      // 普通查询
-      // const query = 'dynamic'
-
-      search4Results(query)
-
-      clearInterval(t);
-    }
-  }, 50)
-}
-
-// 搜索
-function search4Results(query) {
-  PDFViewerApplication.eventBus.on('updatefindmatchescount', function({
-  }) {
-    //if (state === 0) {
-      $('.appended').each(function(index) {
-        console.log('xxxxx', $('.appended').length)
-        $(this).on('click', function(){
-          console.log(index);
-        })
-      })
-    // }
-  })
-
-  // 触发搜索事件
-  PDFViewerApplication.eventBus.on("pagesinit", function () {
-    PDFViewerApplication.eventBus.dispatch("find", { type: "", query: query, highlightAll: true, phraseSearch: true });
-  });
 }
 
 // Block the "load" event until all pages are loaded, to ensure that printing
@@ -313,4 +270,60 @@ if (
   document.addEventListener("DOMContentLoaded", webViewerLoad, true);
 }
 
-export { PDFViewerApplication, AppOptions as PDFViewerApplicationOptions };
+
+// 每页匹配的查询结果
+function getPageMatchQuery() {
+  const pageMatch = PDFViewerApplication.findController._pageMatchesQuery.map((page, index) => {
+    const data = page.map(p => p.ID).reduce((pre, item) => {
+      pre[item] ? pre[item]++ : pre[item] = 1
+      return pre
+    }, {})
+
+    return data
+  })
+
+  return pageMatch
+}
+
+// 查询匹配结果出现在哪些页面
+function getQueryMatchPage() {
+  const pagetMatch = getPageMatchQuery()
+
+  let data = pagetMatch.reduce((pre, item, idx) => {
+    const keys = Object.keys(item)
+    keys.forEach((key, i) => {
+      if (pre[key]) {
+        pre[key]['page'].push(idx)
+        pre[key]['num'] += item[key]
+      } else {
+        pre[key] = {page: [idx], num: item[key]}
+      }
+    })
+
+    return pre
+  }, {})
+
+  return data
+}
+
+// 运行环境准备
+function envReady() {
+  try{
+    if(PDFViewerApplication && typeof(PDFViewerApplication) == "object" && PDFViewerApplication.initialized){
+      return true
+    }
+  }catch(e){
+    return false
+  }
+}
+
+// 搜索
+function search4Results(query) {
+  // 触发搜索事件
+  PDFViewerApplication.eventBus.on("pagesinit", function () {
+    PDFViewerApplication.eventBus.dispatch("find", { type: "", query: query, highlightAll: true, phraseSearch: true });
+  });
+}
+
+export { PDFViewerApplication, AppOptions as PDFViewerApplicationOptions, 
+  getPageMatchQuery, getQueryMatchPage, envReady, search4Results };
