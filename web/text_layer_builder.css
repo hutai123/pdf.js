@@ -83,6 +83,7 @@
 
 .textLayer .highlight.selected {
   background-color: rgba(0, 100, 0, 1);
+  cursor: pointer;
 }
 
 .textLayer ::selection {

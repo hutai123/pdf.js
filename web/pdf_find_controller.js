@@ -642,7 +642,7 @@ class PDFFindController {
      }
 
       // 嵌套查询过滤
-      if (data.pquery && matches.length > 0) {
+      if (data.pquery && tmpMatches.length > 0) {
         let parentMatches = [], parentMatchesLength = [];
         let pquery = data.pquery
 
@@ -669,6 +669,9 @@ class PDFFindController {
 
         if (parentMatches.length === 0) {
           // 父级没有匹配则子级全部清空
+          tmpMatches = []
+          tmpMatchesLength = []
+          tmpMatchesQuery = []
         } else {
           // 子级数据在父级范围内的保留，否则删除
           // 找到索引位置

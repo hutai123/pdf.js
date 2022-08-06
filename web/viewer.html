@@ -60,14 +60,16 @@ See https://github.com/adobe-type-tools/cmap-resources
     <script>
       // 设置查询参数
       // 多关键字查询
-      const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
-            {KD: 'JavaScript', ID: 'id234', HLClass: 'hlC'}]
+      const query = [{KD: 'method-based dynamic compilers', ID: 's_id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
+            {KD: 'TraceMonkey supports all the JavaScript features', ID: 's_id234', HLClass: 'hlC'}]
 
       // 嵌套查询
       // const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based xxx compilers, our xxx '}]
 
       // 普通查询
       // const query = 'dynamic'
+
+      var queryMatchResult = null
       
       $(document).ready(function(){
         // 设置基础查询参数
@@ -77,26 +79,25 @@ See https://github.com/adobe-type-tools/cmap-resources
 
         startSearch()
 
-        $('#findInput').on('focus', function(ev) {
-          console.log('点击');
-          //达到事件结束的效果 但是函数还是往下运行
-          //
-          ev.preventDefault();
-          console.log('已经拦截');
+        $('#keywordsContainer ul li').on('click', function() {
+          let keyId = 's_' + $(this).attr('id')
+          
+          if (queryMatchResult) {
+            const firstPage = queryMatchResult[keyId]?.page[0] + 1
+
+            window.document
+                .querySelectorAll(`[data-page-number="${firstPage}"][class="page"]`)[0]
+                //.querySelectorAll(`[mid="${keyId}"][page="${firstPage}"]`)[0]
+                .scrollIntoView();
+          }
         })
       })
 
       // 默认响应事件函数
       function defaultClickAction(id, page) {
-        console.log('click', id, page)
-
-        console.log(PDFViewerApplication)
-
-        const pageMatch = getPageMatchQuery()
-        console.log(pageMatch)
-
-        const queryMatch = getQueryMatchPage()
-        console.log(queryMatch)
+        const keyId = id.replace('s_', '')
+        $('#keywordsContainer ul li').css('color', 'black')
+        $('#' + keyId).css('color', 'red')
       }
 
       function startSearch() {
@@ -118,14 +119,12 @@ See https://github.com/adobe-type-tools/cmap-resources
       function onSearching() {
         PDFViewerApplication.eventBus.on('updatefindmatchescount', function(matchCount) {
           const pageMatch = getPageMatchQuery()
-          console.log("pageMatch::", pageMatch)
+          // console.log("pageMatch::", pageMatch)
           
           const queryMatch = getQueryMatchPage2(pageMatch)
-          console.log("queryMatch:", queryMatch)
-        })
+          // console.log("queryMatch:", queryMatch)
 
-        PDFViewerApplication.eventBus.on('find', function(matchCount) {
-          console.log('matchCountmatchCount: ', matchCount)
+          queryMatchResult = queryMatch
         })
       }
 
@@ -213,7 +212,31 @@ See https://github.com/adobe-type-tools/cmap-resources
 <!--#else-->
 <!--#include viewer-snippet-minified.html-->
 <!--#endif-->
+  <style>
+    #keywordsContainer {
+      width:200px;
+      height:300px;
+      position:absolute;
+      top:100px;
+      right:50px;
+      background-color:#fff;
+      border:1px solid #ccc;
+    }
 
+    #keywordsContainer ul {
+      padding: 10px 20px;
+    }
+
+    #keywordsContainer ul li{
+      line-height: 30px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #keywordsContainer ul li:hover{
+      color: blue;
+    }
+  </style>
   </head>
 
   <body tabindex="1">
@@ -650,5 +673,14 @@ See https://github.com/adobe-type-tools/cmap-resources
 <!--#if GENERIC-->
     <input type="file" id="fileInput" class="hidden">
 <!--#endif-->
+
+    <div id="keywordsContainer">
+      <div>
+        <ul>
+          <li id="id123">dynamic</li>
+          <li id="id234">JavaScript</li>
+        </ul>
+      </div>
+    </div>
   </body>
 </html>
