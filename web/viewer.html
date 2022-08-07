@@ -55,153 +55,153 @@ See https://github.com/adobe-type-tools/cmap-resources
     </script>
 
     <script src="viewer.js" type="module-shim"></script>
-    
-    <script src="https://libs.baidu.com/jquery/2.1.1/jquery.min.js"></script>
-    <script>
-      // 设置查询参数
-      // 多关键字查询
-      const query = [{KD: 'method-based dynamic compilers', ID: 's_id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
-            {KD: 'TraceMonkey supports all the JavaScript features', ID: 's_id234', HLClass: 'hlC'}]
+<!--#endif-->
 
-      // 嵌套查询
-      // const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based xxx compilers, our xxx '}]
+<script src="https://libs.baidu.com/jquery/2.1.1/jquery.min.js"></script>
+<script>
+  // 设置查询参数
+  // 多关键字查询
+  const query = [{KD: 'method-based dynamic compilers', ID: 's_id123', HLClass: 'hlA', PKD: 'Unlike method-based dynamic compilers, our dynamic'}, 
+        {KD: 'TraceMonkey supports all the JavaScript features', ID: 's_id234', HLClass: 'hlC'}]
 
-      // 普通查询
-      // const query = 'dynamic'
+  // 嵌套查询
+  // const query = [{KD: 'dynamic', ID: 'id123', HLClass: 'hlA', PKD: 'Unlike method-based xxx compilers, our xxx '}]
 
-      var queryMatchResult = null
+  // 普通查询
+  // const query = 'dynamic'
+
+  var queryMatchResult = null
+  
+  $(document).ready(function(){
+    // 设置基础查询参数
+    if (!$('#findBasicInput').val()) {
+      //$('#findBasicInput').val(JSON.stringify(query))
+    }
+
+    startSearch()
+
+    $('#keywordsContainer ul li').on('click', function() {
+      let keyId = 's_' + $(this).attr('id')
       
-      $(document).ready(function(){
-        // 设置基础查询参数
-        if (!$('#findBasicInput').val()) {
-          // $('#findBasicInput').val(JSON.stringify(query))
+      if (queryMatchResult) {
+        const firstPage = queryMatchResult[keyId]?.page[0] + 1
+
+        window.document
+            .querySelectorAll(`[data-page-number="${firstPage}"][class="page"]`)[0]
+            //.querySelectorAll(`[mid="${keyId}"][page="${firstPage}"]`)[0]
+            .scrollIntoView();
+      }
+    })
+  })
+
+  // 默认响应事件函数
+  function defaultClickAction(id, page) {
+    const keyId = id.replace('s_', '')
+    $('#keywordsContainer ul li').css('color', 'black')
+    $('#' + keyId).css('color', 'red')
+  }
+
+  function startSearch() {
+    // 文档加载成功后，执行搜索
+    var t = setInterval(() => {
+      if (envReady()) {
+        // 中止等待
+        clearInterval(t);
+
+        search4Results(query)
+
+        onSearching()
+      }
+    }, 50)
+  }
+
+
+  // 搜索过程中
+  function onSearching() {
+    PDFViewerApplication.eventBus.on('updatefindmatchescount', function(matchCount) {
+      const pageMatch = getPageMatchQuery()
+      // console.log("pageMatch::", pageMatch)
+      
+      const queryMatch = getQueryMatchPage2(pageMatch)
+      // console.log("queryMatch:", queryMatch)
+
+      queryMatchResult = queryMatch
+    })
+  }
+
+  // 运行环境准备
+  function envReady() {
+    try{
+      if(PDFViewerApplication && typeof(PDFViewerApplication) == "object" && PDFViewerApplication.initialized){
+        return true
+      }
+    }catch(e){
+      return false
+    }
+  }
+
+  // 搜索
+  function search4Results(query) {
+    // 触发搜索事件
+    PDFViewerApplication.eventBus.on("pagesinit", function () {
+      PDFViewerApplication.eventBus.dispatch("find", { type: "", query: query, highlightAll: true, phraseSearch: true });
+    });
+  }
+
+  // 每页匹配的查询结果
+  function getPageMatchQuery() {
+    const pageMatch = PDFViewerApplication.findController.pageMatchesQuery.map((page, index) => {
+      const data = page.map(p => p.ID ? p.ID : 'seacrchField').reduce((pre, item) => {
+        pre[item] ? pre[item]++ : pre[item] = 1
+        return pre
+      }, {})
+
+      return data
+    })
+
+    return pageMatch
+  }
+
+  // 查询匹配结果出现在哪些页面
+  function getQueryMatchPage() {
+    const pagetMatch = getPageMatchQuery()
+
+    let data = pagetMatch.reduce((pre, item, idx) => {
+      const keys = Object.keys(item)
+      keys.forEach((key, i) => {
+        if (pre[key]) {
+          pre[key]['page'].push(idx)
+          pre[key]['num'] += item[key]
+        } else {
+          pre[key] = {page: [idx], num: item[key]}
         }
-
-        startSearch()
-
-        $('#keywordsContainer ul li').on('click', function() {
-          let keyId = 's_' + $(this).attr('id')
-          
-          if (queryMatchResult) {
-            const firstPage = queryMatchResult[keyId]?.page[0] + 1
-
-            window.document
-                .querySelectorAll(`[data-page-number="${firstPage}"][class="page"]`)[0]
-                //.querySelectorAll(`[mid="${keyId}"][page="${firstPage}"]`)[0]
-                .scrollIntoView();
-          }
-        })
       })
 
-      // 默认响应事件函数
-      function defaultClickAction(id, page) {
-        const keyId = id.replace('s_', '')
-        $('#keywordsContainer ul li').css('color', 'black')
-        $('#' + keyId).css('color', 'red')
-      }
+      return pre
+    }, {})
 
-      function startSearch() {
-        // 文档加载成功后，执行搜索
-        var t = setInterval(() => {
-          if (envReady()) {
-            // 中止等待
-            clearInterval(t);
-
-            search4Results(query)
-
-            onSearching()
-          }
-        }, 50)
-      }
+    return data
+  }
 
 
-      // 搜索过程中
-      function onSearching() {
-        PDFViewerApplication.eventBus.on('updatefindmatchescount', function(matchCount) {
-          const pageMatch = getPageMatchQuery()
-          // console.log("pageMatch::", pageMatch)
-          
-          const queryMatch = getQueryMatchPage2(pageMatch)
-          // console.log("queryMatch:", queryMatch)
-
-          queryMatchResult = queryMatch
-        })
-      }
-
-      // 运行环境准备
-      function envReady() {
-        try{
-          if(PDFViewerApplication && typeof(PDFViewerApplication) == "object" && PDFViewerApplication.initialized){
-            return true
-          }
-        }catch(e){
-          return false
+  function getQueryMatchPage2(pagetMatch) {
+    let data = pagetMatch.reduce((pre, item, idx) => {
+      const keys = Object.keys(item)
+      keys.forEach((key, i) => {
+        if (pre[key]) {
+          pre[key]['page'].push(idx)
+          pre[key]['num'] += item[key]
+        } else {
+          pre[key] = {page: [idx], num: item[key]}
         }
-      }
+      })
 
-      // 搜索
-      function search4Results(query) {
-        // 触发搜索事件
-        PDFViewerApplication.eventBus.on("pagesinit", function () {
-          PDFViewerApplication.eventBus.dispatch("find", { type: "", query: query, highlightAll: true, phraseSearch: true });
-        });
-      }
+      return pre
+    }, {})
 
-      // 每页匹配的查询结果
-      function getPageMatchQuery() {
-        const pageMatch = PDFViewerApplication.findController.pageMatchesQuery.map((page, index) => {
-          const data = page.map(p => p.ID ? p.ID : 'seacrchField').reduce((pre, item) => {
-            pre[item] ? pre[item]++ : pre[item] = 1
-            return pre
-          }, {})
-
-          return data
-        })
-
-        return pageMatch
-      }
-
-      // 查询匹配结果出现在哪些页面
-      function getQueryMatchPage() {
-        const pagetMatch = getPageMatchQuery()
-
-        let data = pagetMatch.reduce((pre, item, idx) => {
-          const keys = Object.keys(item)
-          keys.forEach((key, i) => {
-            if (pre[key]) {
-              pre[key]['page'].push(idx)
-              pre[key]['num'] += item[key]
-            } else {
-              pre[key] = {page: [idx], num: item[key]}
-            }
-          })
-
-          return pre
-        }, {})
-
-        return data
-      }
-
-
-      function getQueryMatchPage2(pagetMatch) {
-        let data = pagetMatch.reduce((pre, item, idx) => {
-          const keys = Object.keys(item)
-          keys.forEach((key, i) => {
-            if (pre[key]) {
-              pre[key]['page'].push(idx)
-              pre[key]['num'] += item[key]
-            } else {
-              pre[key] = {page: [idx], num: item[key]}
-            }
-          })
-
-          return pre
-        }, {})
-
-        return data
-      }
-    </script>
-<!--#endif-->
+    return data
+  }
+</script>
 
 <!--#if (GENERIC && !MINIFIED) -->
 <!--#include viewer-snippet.html-->
