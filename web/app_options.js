@@ -316,7 +316,6 @@ if (
     kind: OptionKind.VIEWER,
   };
 } else if (PDFJSDev.test("CHROME")) {
-  debugger
   defaultOptions.defaultUrl = {
     /** @type {string} */
     value: "",

@@ -270,4 +270,5 @@ if (
 } else {
   document.addEventListener("DOMContentLoaded", webViewerLoad, true);
 }
-export { PDFViewerApplication, AppOptions as PDFViewerApplicationOptions};
+
+export { PDFViewerApplication, AppOptions as PDFViewerApplicationOptions };
