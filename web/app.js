@@ -260,8 +260,9 @@ const PDFViewerApplication = {
   _saveInProgress: false,
   _docStats: null,
   _wheelUnusedTicks: 0,
-  _idleCallbacks: new Set(),
   _PDFBug: null,
+  _hasAnnotationEditors: false,
+  _title: document.title,
   _printAnnotationStoragePromise: null,
 
   // Called once when the document is loaded.
@@ -584,11 +585,12 @@ const PDFViewerApplication = {
         appConfig.annotationEditorParams,
         eventBus
       );
+    } else {
       for (const element of [
         document.getElementById("editorModeButtons"),
         document.getElementById("editorModeSeparator"),
       ]) {
-        element.classList.remove("hidden");
+        element.hidden = true;
       }
     }
 
@@ -612,7 +614,8 @@ const PDFViewerApplication = {
 
     this.secondaryToolbar = new SecondaryToolbar(
       appConfig.secondaryToolbar,
-      eventBus
+      eventBus,
+      this.externalServices
     );
 
     if (this.supportsFullscreen) {
@@ -788,12 +791,16 @@ const PDFViewerApplication = {
     this.setTitle(title);
   },
 
-  setTitle(title) {
+  setTitle(title = this._title) {
+    this._title = title;
+
     if (this.isViewerEmbedded) {
       // Embedded PDF viewers should not be changing their parent page's title.
       return;
     }
-    document.title = title;
+    const editorIndicator =
+      this._hasAnnotationEditors && !this.pdfRenderingQueue.printing;
+    document.title = `${editorIndicator ? "* " : ""}${title}`;
   },
 
   get _docFilename() {
@@ -807,22 +814,7 @@ const PDFViewerApplication = {
    */
   _hideViewBookmark() {
     // URL does not reflect proper document location - hiding some buttons.
-    const { toolbar, secondaryToolbar } = this.appConfig;
-    toolbar.viewBookmark.hidden = true;
-    secondaryToolbar.viewBookmarkButton.hidden = true;
-  },
-
-  /**
-   * @private
-   */
-  _cancelIdleCallbacks() {
-    if (!this._idleCallbacks.size) {
-      return;
-    }
-    for (const callback of this._idleCallbacks) {
-      window.cancelIdleCallback(callback);
-    }
-    this._idleCallbacks.clear();
+    this.appConfig.secondaryToolbar.viewBookmarkButton.hidden = true;
   },
 
   /**
@@ -880,10 +872,11 @@ const PDFViewerApplication = {
     this._contentLength = null;
     this._saveInProgress = false;
     this._docStats = null;
+    this._hasAnnotationEditors = false;
 
-    this._cancelIdleCallbacks();
     promises.push(this.pdfScriptingManager.destroyPromise);
 
+    this.setTitle();
     this.pdfSidebar.reset();
     this.pdfOutlineViewer.reset();
     this.pdfAttachmentViewer.reset();
@@ -1043,6 +1036,13 @@ const PDFViewerApplication = {
     } finally {
       await this.pdfScriptingManager.dispatchDidSave();
       this._saveInProgress = false;
+    }
+
+    if (this._hasAnnotationEditors) {
+      this.externalServices.reportTelemetry({
+        type: "editing",
+        data: { type: "save" },
+      });
     }
   },
 
@@ -1414,19 +1414,6 @@ const PDFViewerApplication = {
         }
         this.pdfLayerViewer.render({ optionalContentConfig, pdfDocument });
       });
-      if (
-        (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
-        "requestIdleCallback" in window
-      ) {
-        const callback = window.requestIdleCallback(
-          () => {
-            this._collectTelemetry(pdfDocument);
-            this._idleCallbacks.delete(callback);
-          },
-          { timeout: 1000 }
-        );
-        this._idleCallbacks.add(callback);
-      }
     });
 
     this._initializePageLabels(pdfDocument);
@@ -1471,23 +1458,6 @@ const PDFViewerApplication = {
       numPages: this.pagesCount,
       URL: this.url,
     };
-  },
-
-  /**
-   * A place to fetch data for telemetry after one page is rendered and the
-   * viewer is idle.
-   * @private
-   */
-  async _collectTelemetry(pdfDocument) {
-    const markInfo = await this.pdfDocument.getMarkInfo();
-    if (pdfDocument !== this.pdfDocument) {
-      return; // Document was closed while waiting for mark info.
-    }
-    const tagged = markInfo?.Marked || false;
-    this.externalServices.reportTelemetry({
-      type: "tagged",
-      tagged,
-    });
   },
 
   /**
@@ -1573,7 +1543,7 @@ const PDFViewerApplication = {
     }
     if (pdfTitle) {
       this.setTitle(
-        `${pdfTitle} - ${this._contentDispositionFilename || document.title}`
+        `${pdfTitle} - ${this._contentDispositionFilename || this._title}`
       );
     } else if (this._contentDispositionFilename) {
       this.setTitle(this._contentDispositionFilename);
@@ -1734,6 +1704,17 @@ const PDFViewerApplication = {
         delete this._annotationStorageModified;
       }
     };
+    annotationStorage.onAnnotationEditor = typeStr => {
+      this._hasAnnotationEditors = !!typeStr;
+      this.setTitle();
+
+      if (typeStr) {
+        this.externalServices.reportTelemetry({
+          type: "editing",
+          data: { type: typeStr },
+        });
+      }
+    };
   },
 
   setInitialView(
@@ -1866,12 +1847,21 @@ const PDFViewerApplication = {
     );
     this.printService = printService;
     this.forceRendering();
+    // Disable the editor-indicator during printing (fixes bug 1790552).
+    this.setTitle();
 
     printService.layout();
 
     this.externalServices.reportTelemetry({
       type: "print",
     });
+
+    if (this._hasAnnotationEditors) {
+      this.externalServices.reportTelemetry({
+        type: "editing",
+        data: { type: "print" },
+      });
+    }
   },
 
   afterPrint() {
@@ -1889,6 +1879,8 @@ const PDFViewerApplication = {
       this.pdfDocument?.annotationStorage.resetModified();
     }
     this.forceRendering();
+    // Re-enable the editor-indicator after printing (fixes bug 1790552).
+    this.setTitle();
   },
 
   rotatePages(delta) {
@@ -1979,6 +1971,34 @@ const PDFViewerApplication = {
 
   bindWindowEvents() {
     const { eventBus, _boundEvents } = this;
+
+    function addWindowResolutionChange(evt = null) {
+      if (evt) {
+        webViewerResolutionChange(evt);
+      }
+      const mediaQueryList = window.matchMedia(
+        `(resolution: ${window.devicePixelRatio || 1}dppx)`
+      );
+      if (
+        typeof PDFJSDev !== "undefined" &&
+        PDFJSDev.test("GENERIC && !SKIP_BABEL") &&
+        typeof mediaQueryList.addEventListener !== "function"
+      ) {
+        return; // Not supported in Safari<14.
+      }
+      mediaQueryList.addEventListener("change", addWindowResolutionChange, {
+        once: true,
+      });
+
+      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+        return;
+      }
+      _boundEvents.removeWindowResolutionChange ||= function () {
+        mediaQueryList.removeEventListener("change", addWindowResolutionChange);
+        _boundEvents.removeWindowResolutionChange = null;
+      };
+    }
+    addWindowResolutionChange();
 
     _boundEvents.windowResize = () => {
       eventBus.dispatch("resize", { source: window });
@@ -2099,6 +2119,7 @@ const PDFViewerApplication = {
       _boundEvents.windowUpdateFromSandbox
     );
 
+    _boundEvents.removeWindowResolutionChange?.();
     _boundEvents.windowResize = null;
     _boundEvents.windowHashChange = null;
     _boundEvents.windowBeforePrint = null;
@@ -2284,7 +2305,6 @@ function webViewerInitialized() {
   }
 
   if (!PDFViewerApplication.supportsFullscreen) {
-    appConfig.toolbar.presentationModeButton.classList.add("hidden");
     appConfig.secondaryToolbar.presentationModeButton.classList.add("hidden");
   }
 
@@ -2437,7 +2457,6 @@ function webViewerUpdateViewarea({ location }) {
   const href = PDFViewerApplication.pdfLinkService.getAnchorUrl(
     location.pdfOpenParams
   );
-  PDFViewerApplication.appConfig.toolbar.viewBookmark.href = href;
   PDFViewerApplication.appConfig.secondaryToolbar.viewBookmarkButton.href =
     href;
 
@@ -2468,7 +2487,12 @@ function webViewerSpreadModeChanged(evt) {
 }
 
 function webViewerResize() {
-  const { pdfDocument, pdfViewer } = PDFViewerApplication;
+  const { pdfDocument, pdfViewer, pdfRenderingQueue } = PDFViewerApplication;
+
+  if (pdfRenderingQueue.printing && window.matchMedia("print").matches) {
+    // Work-around issue 15324 by ignoring "resize" events during printing.
+    return;
+  }
   pdfViewer.updateContainerHeightCss();
 
   if (!pdfDocument) {
@@ -2663,6 +2687,10 @@ function webViewerPageChanging({ pageNumber, pageLabel }) {
   if (PDFViewerApplication.pdfSidebar.visibleView === SidebarView.THUMBS) {
     PDFViewerApplication.pdfThumbnailViewer.scrollThumbnailIntoView(pageNumber);
   }
+}
+
+function webViewerResolutionChange(evt) {
+  PDFViewerApplication.pdfViewer.refresh();
 }
 
 function webViewerVisibilityChange(evt) {
@@ -2897,6 +2925,10 @@ function webViewerKeyDown(evt) {
       case 80: // p
         PDFViewerApplication.requestPresentationMode();
         handled = true;
+        PDFViewerApplication.externalServices.reportTelemetry({
+          type: "buttons",
+          data: { id: "presentationModeKeyboard" },
+        });
         break;
       case 71: // g
         // focuses input#pageNumber field

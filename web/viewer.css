@@ -71,7 +71,6 @@
   --loading-icon: url(images/loading.svg);
   --treeitem-expanded-icon: url(images/treeitem-expanded.svg);
   --treeitem-collapsed-icon: url(images/treeitem-collapsed.svg);
-  --toolbarButton-editorNone-icon: url(images/toolbarButton-editorNone.svg);
   --toolbarButton-editorFreeText-icon: url(images/toolbarButton-editorFreeText.svg);
   --toolbarButton-editorInk-icon: url(images/toolbarButton-editorInk.svg);
   --toolbarButton-menuArrow-icon: url(images/toolbarButton-menuArrow.svg);
@@ -883,13 +882,8 @@ select {
   mask-image: var(--toolbarButton-zoomIn-icon);
 }
 
-#presentationMode::before,
-#secondaryPresentationMode::before {
+#presentationMode::before {
   mask-image: var(--toolbarButton-presentationMode-icon);
-}
-
-#editorNone::before {
-  mask-image: var(--toolbarButton-editorNone-icon);
 }
 
 #editorFreeText::before {
@@ -927,8 +921,7 @@ a.secondaryToolbarButton[href="#"] {
   pointer-events: none;
 }
 
-#viewBookmark::before,
-#secondaryViewBookmark::before {
+#viewBookmark::before {
   mask-image: var(--toolbarButton-bookmark-icon);
 }
 
@@ -984,6 +977,7 @@ a.secondaryToolbarButton[href="#"] {
   white-space: normal;
   border-radius: 0;
   box-sizing: border-box;
+  display: inline-block;
 }
 .secondaryToolbarButton > span {
   padding-inline-end: 4px;
@@ -1461,8 +1455,7 @@ dialog :link {
 }
 
 .visibleLargeView,
-.visibleMediumView,
-.visibleSmallView {
+.visibleMediumView {
   display: none;
 }
 
@@ -1507,9 +1500,6 @@ dialog :link {
   .hiddenSmallView,
   .hiddenSmallView * {
     display: none;
-  }
-  .visibleSmallView {
-    display: inherit;
   }
   .toolbarButtonSpacer {
     width: 0;

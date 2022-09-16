@@ -78,18 +78,22 @@ const builder = require("./external/builder/builder.js");
 const CONFIG_FILE = "pdfjs.config";
 const config = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
 
+const ENV_TARGETS = [
+  "last 2 versions",
+  "Chrome >= 76",
+  "Firefox ESR",
+  "Safari >= 13.1",
+  "> 1%",
+  "not IE > 0",
+  "not dead",
+];
+
 // Default Autoprefixer config used for generic, components, minified-pre
 const AUTOPREFIXER_CONFIG = {
-  overrideBrowserslist: [
-    "last 2 versions",
-    "Chrome >= 76",
-    "Firefox ESR",
-    "Safari >= 13.1",
-    "> 1%",
-    "not IE > 0",
-    "not dead",
-  ],
+  overrideBrowserslist: ENV_TARGETS,
 };
+// Default Babel targets used for generic, components, minified-pre
+const BABEL_TARGETS = ENV_TARGETS.join(", ");
 
 const DEFINES = Object.freeze({
   PRODUCTION: true,
@@ -213,16 +217,7 @@ function createWebpackConfig(
   }
   const babelExcludeRegExp = new RegExp(`(${babelExcludes.join("|")})`);
 
-  const babelPlugins = [
-    "@babel/plugin-transform-modules-commonjs",
-    [
-      "@babel/plugin-transform-runtime",
-      {
-        helpers: false,
-        regenerator: true,
-      },
-    ],
-  ];
+  const babelPlugins = ["@babel/plugin-transform-modules-commonjs"];
 
   const plugins = [];
   if (!disableLicenseHeader) {
@@ -262,6 +257,7 @@ function createWebpackConfig(
           options: {
             presets: skipBabel ? undefined : ["@babel/preset-env"],
             plugins: babelPlugins,
+            targets: BABEL_TARGETS,
           },
         },
         {
@@ -1266,7 +1262,6 @@ gulp.task(
       const MOZCENTRAL_DIR = BUILD_DIR + "mozcentral/",
         MOZCENTRAL_EXTENSION_DIR = MOZCENTRAL_DIR + "browser/extensions/pdfjs/",
         MOZCENTRAL_CONTENT_DIR = MOZCENTRAL_EXTENSION_DIR + "content/",
-        FIREFOX_EXTENSION_DIR = "extensions/firefox/",
         MOZCENTRAL_L10N_DIR =
           MOZCENTRAL_DIR + "browser/locales/en-US/pdfviewer/",
         FIREFOX_CONTENT_DIR = EXTENSION_SRC_DIR + "/firefox/content/";
@@ -1278,10 +1273,6 @@ gulp.task(
 
       // Clear out everything in the firefox extension build directory
       rimraf.sync(MOZCENTRAL_DIR);
-
-      const versionJSON = getVersionJSON();
-      const version = versionJSON.version,
-        commit = versionJSON.commit;
 
       return merge([
         createMainBundle(defines).pipe(
@@ -1325,11 +1316,6 @@ gulp.task(
         gulp
           .src("l10n/en-US/*.properties")
           .pipe(gulp.dest(MOZCENTRAL_L10N_DIR)),
-        gulp
-          .src(FIREFOX_EXTENSION_DIR + "README.mozilla")
-          .pipe(replace(/\bPDFJSSCRIPT_VERSION\b/g, version))
-          .pipe(replace(/\bPDFJSSCRIPT_COMMIT\b/g, commit))
-          .pipe(gulp.dest(MOZCENTRAL_EXTENSION_DIR)),
         gulp.src("LICENSE").pipe(gulp.dest(MOZCENTRAL_EXTENSION_DIR)),
         gulp
           .src(FIREFOX_CONTENT_DIR + "PdfJsDefaultPreferences.jsm")
@@ -1503,15 +1489,9 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       presets: skipBabel ? undefined : ["@babel/preset-env"],
       plugins: [
         "@babel/plugin-transform-modules-commonjs",
-        [
-          "@babel/plugin-transform-runtime",
-          {
-            helpers: false,
-            regenerator: true,
-          },
-        ],
         babelPluginReplaceNonWebpackImports,
       ],
+      targets: BABEL_TARGETS,
     }).code;
     const removeCjsSrc =
       /^(var\s+\w+\s*=\s*(_interopRequireDefault\()?require\(".*?)(?:\/src)(\/[^"]*"\)\)?;)$/gm;
@@ -1823,9 +1803,8 @@ gulp.task(
     "generic",
     "types",
     function createTypesTest() {
-      const [packageJsonSrc] = packageBowerJson();
       return merge([
-        packageJsonSrc.pipe(gulp.dest(TYPESTEST_DIR)),
+        packageJson().pipe(gulp.dest(TYPESTEST_DIR)),
         gulp
           .src([
             GENERIC_DIR + "build/pdf.js",
@@ -2168,7 +2147,7 @@ gulp.task(
   )
 );
 
-function packageBowerJson() {
+function packageJson() {
   const VERSION = getVersionJSON().version;
 
   const DIST_NAME = "pdfjs-dist";
@@ -2192,14 +2171,6 @@ function packageBowerJson() {
       dommatrix: "^1.0.3",
       "web-streams-polyfill": "^3.2.1",
     },
-    peerDependencies: {
-      "worker-loader": "^3.0.8", // Used in `external/dist/webpack.js`.
-    },
-    peerDependenciesMeta: {
-      "worker-loader": {
-        optional: true,
-      },
-    },
     browser: {
       canvas: false,
       fs: false,
@@ -2215,18 +2186,10 @@ function packageBowerJson() {
     },
   };
 
-  const bowerManifest = {
-    name: DIST_NAME,
-    version: VERSION,
-    main: ["build/pdf.js", "build/pdf.worker.js"],
-    ignore: [],
-    keywords: DIST_KEYWORDS,
-  };
-
-  return [
-    createStringSource("package.json", JSON.stringify(npmManifest, null, 2)),
-    createStringSource("bower.json", JSON.stringify(bowerManifest, null, 2)),
-  ];
+  return createStringSource(
+    "package.json",
+    JSON.stringify(npmManifest, null, 2)
+  );
 }
 
 gulp.task(
@@ -2254,12 +2217,8 @@ gulp.task(
       console.log("### Overwriting all files");
       rimraf.sync(path.join(DIST_DIR, "*"));
 
-      // Rebuilding manifests
-      const [packageJsonSrc, bowerJsonSrc] = packageBowerJson();
-
       return merge([
-        packageJsonSrc.pipe(gulp.dest(DIST_DIR)),
-        bowerJsonSrc.pipe(gulp.dest(DIST_DIR)),
+        packageJson().pipe(gulp.dest(DIST_DIR)),
         vfs
           .src("external/dist/**/*", { base: "external/dist", stripBOM: false })
           .pipe(gulp.dest(DIST_DIR)),

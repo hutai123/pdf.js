@@ -170,15 +170,43 @@ describe("api", function () {
       expect(true).toEqual(true);
     });
 
-    it("creates pdf doc from typed array", async function () {
+    it("creates pdf doc from TypedArray", async function () {
       const typedArrayPdf = await DefaultFileReaderFactory.fetch({
         path: TEST_PDFS_PATH + basicApiFileName,
       });
 
       // Sanity check to make sure that we fetched the entire PDF file.
+      expect(typedArrayPdf instanceof Uint8Array).toEqual(true);
       expect(typedArrayPdf.length).toEqual(basicApiFileLength);
 
       const loadingTask = getDocument(typedArrayPdf);
+      expect(loadingTask instanceof PDFDocumentLoadingTask).toEqual(true);
+
+      const progressReportedCapability = createPromiseCapability();
+      loadingTask.onProgress = function (data) {
+        progressReportedCapability.resolve(data);
+      };
+
+      const data = await Promise.all([
+        loadingTask.promise,
+        progressReportedCapability.promise,
+      ]);
+      expect(data[0] instanceof PDFDocumentProxy).toEqual(true);
+      expect(data[1].loaded / data[1].total).toEqual(1);
+
+      await loadingTask.destroy();
+    });
+
+    it("creates pdf doc from ArrayBuffer", async function () {
+      const { buffer: arrayBufferPdf } = await DefaultFileReaderFactory.fetch({
+        path: TEST_PDFS_PATH + basicApiFileName,
+      });
+
+      // Sanity check to make sure that we fetched the entire PDF file.
+      expect(arrayBufferPdf instanceof ArrayBuffer).toEqual(true);
+      expect(arrayBufferPdf.byteLength).toEqual(basicApiFileLength);
+
+      const loadingTask = getDocument(arrayBufferPdf);
       expect(loadingTask instanceof PDFDocumentLoadingTask).toEqual(true);
 
       const progressReportedCapability = createPromiseCapability();
@@ -441,7 +469,7 @@ describe("api", function () {
       }
     );
 
-    it("creates pdf doc from empty typed array", async function () {
+    it("creates pdf doc from empty TypedArray", async function () {
       const loadingTask = getDocument(new Uint8Array(0));
       expect(loadingTask instanceof PDFDocumentLoadingTask).toEqual(true);
 
@@ -1362,7 +1390,7 @@ describe("api", function () {
             defaultValue: "",
             multiline: false,
             password: false,
-            charLimit: null,
+            charLimit: 0,
             comb: false,
             editable: true,
             hidden: false,
@@ -1507,11 +1535,65 @@ describe("api", function () {
       expect(outline.length).toEqual(6);
 
       expect(outline[4]).toEqual({
+        action: null,
         dest: "Händel -- Halle🎆lujah",
         url: null,
         unsafeUrl: undefined,
         newWindow: undefined,
+        setOCGState: undefined,
         title: "Händel -- Halle🎆lujah",
+        color: new Uint8ClampedArray([0, 0, 0]),
+        count: undefined,
+        bold: false,
+        italic: false,
+        items: [],
+      });
+
+      await loadingTask.destroy();
+    });
+
+    it("gets outline, with named-actions (issue 15367)", async function () {
+      const loadingTask = getDocument(buildGetDocumentParams("issue15367.pdf"));
+      const pdfDoc = await loadingTask.promise;
+      const outline = await pdfDoc.getOutline();
+
+      expect(Array.isArray(outline)).toEqual(true);
+      expect(outline.length).toEqual(4);
+
+      expect(outline[1]).toEqual({
+        action: "PrevPage",
+        dest: null,
+        url: null,
+        unsafeUrl: undefined,
+        newWindow: undefined,
+        setOCGState: undefined,
+        title: "Previous Page",
+        color: new Uint8ClampedArray([0, 0, 0]),
+        count: undefined,
+        bold: false,
+        italic: false,
+        items: [],
+      });
+
+      await loadingTask.destroy();
+    });
+
+    it("gets outline, with SetOCGState-actions (issue 15372)", async function () {
+      const loadingTask = getDocument(buildGetDocumentParams("issue15372.pdf"));
+      const pdfDoc = await loadingTask.promise;
+      const outline = await pdfDoc.getOutline();
+
+      expect(Array.isArray(outline)).toEqual(true);
+      expect(outline.length).toEqual(1);
+
+      expect(outline[0]).toEqual({
+        action: null,
+        dest: null,
+        url: null,
+        unsafeUrl: undefined,
+        newWindow: undefined,
+        setOCGState: { state: ["OFF", "ON", "50R"], preserveRB: false },
+        title: "Display Layer",
         color: new Uint8ClampedArray([0, 0, 0]),
         count: undefined,
         bold: false,
